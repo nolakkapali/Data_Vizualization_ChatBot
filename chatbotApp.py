@@ -11,7 +11,6 @@ HF_TOKEN = st.secrets["HF_TOKEN"]
 
 # Mistral-7B-v0.2
 client = InferenceClient(model="mistralai/Mistral-7B-Instruct-v0.2", token=HF_TOKEN)
-
 st.set_page_config(page_title="RAG Data Viz Bot", page_icon="📊", layout="wide")
 
 def extract_text_from_pdf(pdf_path):
@@ -89,6 +88,7 @@ if prompt := st.chat_input("How can I help you with your charts?"):
 
 # Sidebar info
 st.sidebar.info("This bot uses RAG (Retrieval-Augmented Generation) to answer questions from your PDF guide.")
+
 
 
 
