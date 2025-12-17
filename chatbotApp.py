@@ -7,7 +7,7 @@ from huggingface_hub import InferenceClient
 
 # Configuration & Token
 # Hugging Face API Token
-HF_TOKEN = "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"
+HF_TOKEN = st.secrets["HF_TOKEN"]
 
 # Mistral-7B-v0.2
 client = InferenceClient(model="mistralai/Mistral-7B-Instruct-v0.2", token=HF_TOKEN)
@@ -89,5 +89,6 @@ if prompt := st.chat_input("How can I help you with your charts?"):
 
 # Sidebar info
 st.sidebar.info("This bot uses RAG (Retrieval-Augmented Generation) to answer questions from your PDF guide.")
+
 
 
