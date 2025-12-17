@@ -6,7 +6,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.llms import HuggingFaceHub
-from langchain_community.chains import RetrievalQA
+from langchain.chains.retrieval_qa.base import RetrievalQA
 
 #Configuration & Token
 #Hugging Face token is used here so that it can be run on the cloud
@@ -87,3 +87,4 @@ st.sidebar.write("**Docs to Vectors:** PyPDFLoader")
 st.sidebar.write("**Vector DB:** Chroma DB")
 
 st.sidebar.write("**LLM:** Gemma-2B (Cloud)")
+
