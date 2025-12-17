@@ -1,70 +1,31 @@
 import os
 import streamlit as st
+from pypdf import PdfReader
+from huggingface_hub import InferenceClient
 
-# এরর এড়াতে ওএস এনভায়রনমেন্ট সেটআপ
-os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
+# Configuration
+HF_TOKEN = "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"
+client = InferenceClient(model="google/gemma-2b-it", token=HF_TOKEN)
 
-# সঠিক ইমপোর্ট পাথসমূহ (Python 3.12 এর জন্য)
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter 
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_community.llms import HuggingFaceHub
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate
+st.set_page_config(page_title="Easy Data Bot", page_icon="📊")
 
-# Page Config
-st.set_page_config(page_title="Data Viz RAG Bot", page_icon="📊", layout="wide")
+# ১. PDF থেকে টেক্সট পড়ার সহজ ফাংশন
+def extract_text_from_pdf(pdf_path):
+    reader = PdfReader(pdf_path)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text()
+    return text
 
-# Sidebar
-st.sidebar.header("RAG Parameters")
-chunk_size = st.sidebar.slider("Chunk Size", 100, 1000, 500)
-chunk_overlap = st.sidebar.slider("Chunk Overlap", 0, 200, 50)
-k_value = st.sidebar.slider("Top-K (Retrieval)", 1, 15, 10)
-temperature = st.sidebar.slider("LLM Temperature", 0.0, 1.0, 0.1)
+st.title("Data Visualization Advisor")
 
-st.title("Data Visualization Advisor Chatbot")
-st.markdown("This system uses **Gemma-2B**, **Chroma DB**, and **RAG** architecture.")
-
-# RAG System Initialization
-@st.cache_resource
-def initialize_rag_system(_c_size, _c_overlap, _k, _temp):
-    # PDF Load
-    loader = PyPDFLoader("data_viz_guide.pdf")
-    documents = loader.load()
-    
-    # Split
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=_c_size, chunk_overlap=_c_overlap)
-    chunks = text_splitter.split_documents(documents)
-    
-    # Embeddings (Stable path)
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    vector_db = Chroma.from_documents(chunks, embeddings)
-    
-    # LLM (Stable path)
-    llm = HuggingFaceHub(
-        repo_id="google/gemma-2b", 
-        model_kwargs={"temperature": _temp, "max_new_tokens": 512}
-    )
-    
-    # Modern Prompt Template
-    prompt = ChatPromptTemplate.from_template("""
-    Answer the question based only on the context.
-    Context: {context}
-    Question: {input}
-    Answer:""")
-
-    # Modern Chain Construction
-    combine_docs_chain = create_stuff_documents_chain(llm, prompt)
-    retrieval_chain = create_retrieval_chain(vector_db.as_retriever(search_kwargs={"k": _k}), combine_docs_chain)
-    
-    return retrieval_chain
-
-# Load System
-with st.spinner("Setting up system..."):
-    qa_chain = initialize_rag_system(chunk_size, chunk_overlap, k_value, temperature)
+# সিস্টেম লোড
+if os.path.exists("data_viz_guide.pdf"):
+    with st.spinner("Reading PDF Guide..."):
+        context_text = extract_text_from_pdf("data_viz_guide.pdf")
+else:
+    st.error("PDF file not found! Please upload 'data_viz_guide.pdf' to GitHub.")
+    st.stop()
 
 # Chat UI
 if "messages" not in st.session_state:
@@ -74,14 +35,15 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if user_input := st.chat_input("Ask about charts..."):
-    st.session_state.messages.append({"role": "user", "content": user_input})
+if prompt := st.chat_input("Ask me about charts"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
-        st.markdown(user_input)
+        st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # invoke() পদ্ধতি ব্যবহার করা হয়েছে
-        response = qa_chain.invoke({"input": user_input})
-        answer = response["answer"]
-        st.markdown(answer)
-        st.session_state.messages.append({"role": "assistant", "content": answer})
+        # সরাসরি Hugging Face-কে প্রশ্ন পাঠানো (Prompt Engineering)
+        full_prompt = f"Context: {context_text[:3000]}\n\nQuestion: {prompt}\n\nAnswer the question based on the context above."
+        
+        response = client.text_generation(full_prompt, max_new_tokens=500)
+        st.markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
