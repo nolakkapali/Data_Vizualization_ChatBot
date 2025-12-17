@@ -6,8 +6,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.llms import HuggingFaceHub
-# এই লাইনটি ঠিকভাবে লিখুন
-from langchain.chains.retrieval_qa.base import RetrievalQA
+from langchain_community.chains import RetrievalQA
 
 #Configuration & Token
 #Hugging Face token is used here so that it can be run on the cloud
@@ -86,4 +85,5 @@ if prompt := st.chat_input("Ask a question (e.g., Which chart for trends?)"):
 st.sidebar.markdown("---")
 st.sidebar.write("**Docs to Vectors:** PyPDFLoader")
 st.sidebar.write("**Vector DB:** Chroma DB")
+
 st.sidebar.write("**LLM:** Gemma-2B (Cloud)")
