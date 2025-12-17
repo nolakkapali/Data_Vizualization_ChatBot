@@ -5,61 +5,87 @@ import chromadb
 from chromadb.utils import embedding_functions
 from huggingface_hub import InferenceClient
 
-#LLM Model (Gemma-2B) and Token
+# Configuration & Token
+# Hugging Face API Token
 HF_TOKEN = "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"
-client = InferenceClient(model="google/gemma-2b-it", token=HF_TOKEN)
 
-st.set_page_config(page_title="RAG Chatbot", page_icon="📊")
+# Mistral-7B-v0.2
+client = InferenceClient(model="mistralai/Mistral-7B-Instruct-v0.2", token=HF_TOKEN)
 
-#Pypdf for pdf without OCR
-def load_pdf(file_path):
-    reader = PdfReader(file_path)
+st.set_page_config(page_title="RAG Data Viz Bot", page_icon="📊", layout="wide")
+
+def extract_text_from_pdf(pdf_path):
+    reader = PdfReader(pdf_path)
     text_chunks = []
     for page in reader.pages:
         content = page.extract_text()
         if content:
-            #Divided into smaller chunks
             text_chunks.append(content)
     return text_chunks
 
-#Word Embedding & ChromaDB
+# Word Embedding (SentenceTransformer) and ChromaDB
 @st.cache_resource
-def setup_db():
-    #Embedding Model: all-MiniLM-L6-v2
+def initialize_database():
+    # Embedding Model: all-MiniLM-L6-v2 
     emb_fn = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
     
-    # ChromaDB setup
+    # ChromaDB setup (In-memory database)
     chroma_client = chromadb.Client()
-    collection = chroma_client.get_or_create_collection(name="my_pdf_db", embedding_function=emb_fn)
+    collection = chroma_client.get_or_create_collection(name="viz_guide_db", embedding_function=emb_fn)
     
-    chunks = load_pdf("data_viz_guide.pdf")
-    #Data stored in Database
-    for i, chunk in enumerate(chunks):
-        collection.add(documents=[chunk], ids=[f"id_{i}"])
-    return collection
+    if os.path.exists("data_viz_guide.pdf"):
+        chunks = extract_text_from_pdf("data_viz_guide.pdf")
+        for i, chunk in enumerate(chunks):
+            collection.add(documents=[chunk], ids=[f"id_{i}"])
+        return collection
+    else:
+        st.error("Error: 'data_viz_guide.pdf' not found in GitHub repository!")
+        return None
 
-db = setup_db()
+# System Load
+with st.spinner("Initializing RAG System (Vector DB + Embedding)..."):
+    db = initialize_database()
 
-st.title("Data Viz RAG Chatbot")
+st.title("📊 Data Visualization Advisor")
+st.markdown("Architecture: **RAG** | DB: **ChromaDB** | LLM: **Mistral-7B**")
 
+# Chat History Setup
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Message History Shown
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]): st.markdown(msg["content"])
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-if prompt := st.chat_input("Ask a question"):
+# User Input
+if prompt := st.chat_input("How can I help you with your charts?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"): st.markdown(prompt)
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        #Here K=10
-        results = db.query(query_texts=[prompt], n_results=10)
-        context = " ".join(results['documents'][0])
-        
-        #Input given to LLM
-        final_prompt = f"Context: {context}\n\nQuestion: {prompt}\nAnswer:"
-        response = client.text_generation(final_prompt, max_new_tokens=500)
-        
-        st.markdown(response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        if db:
+            # K=10
+            results = db.query(query_texts=[prompt], n_results=10)
+            context_data = " ".join(results['documents'][0])
+            
+            # Prompt Engineering for LLM
+            messages = [
+                {"role": "system", "content": "You are a Data Viz Expert. Use the context to answer."},
+                {"role": "user", "content": f"Context: {context_data}\n\nQuestion: {prompt}"}
+            ]
+            
+            try:
+                # Answer generataed from LLM
+                response = client.chat_completion(messages=messages, max_tokens=512)
+                answer = response.choices[0].message.content
+                st.markdown(answer)
+                st.session_state.messages.append({"role": "assistant", "content": answer})
+            except Exception as e:
+                st.error(f"LLM API Error: {str(e)}")
+        else:
+            st.error("Database not initialized.")
+
+# Sidebar info
+st.sidebar.info("This bot uses RAG (Retrieval-Augmented Generation) to answer questions from your PDF guide.")
